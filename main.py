@@ -1,34 +1,31 @@
+import wmi
+import psutil
+import pyautogui
 import time
-from plyer import notification
-from pygatt import BLEAddressType, GATTToolBackend
 
-# Endereços MAC dos dispositivos Bluetooth
-fone_endereco = "00:11:22:33:44:55"
-teclado_endereco = "11:22:33:44:55:66"
-mouse_endereco = "22:33:44:55:66:77"
+def is_bluetooth_connected(device_name):
+    wmi_obj = wmi.WMI()
+    for controller in wmi_obj.query("SELECT * FROM Win32_PnPEntity WHERE Name LIKE '%(COM%'"):
+        if device_name in controller.Description:
+            for connected_device in controller[0].Associators_():
+                if connected_device.ClassGuid == "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}":
+                    return True
+    return False
 
-while True:
-    try:
-        # Inicializa o backend do GATTTool
-        with GATTToolBackend() as backend:
+def main():
+    devices = {
+        "MX Master 3": "mouse",
+        "MX Keys Mini": "keyboard",
+        "AirPods de Leonardo": "headphones"
+    }
 
-            # Conecta aos dispositivos Bluetooth
-            fone = backend.connect(fone_endereco, address_type=BLEAddressType.public)
-            teclado = backend.connect(teclado_endereco, address_type=BLEAddressType.public)
-            mouse = backend.connect(mouse_endereco, address_type=BLEAddressType.public)
+    while True:
+        for device_name, device_type in devices.items():
+            if is_bluetooth_connected(device_name):
+                battery = psutil.sensors_battery()
+                message = f"{device_type.title()} battery: {battery.percent}%"
+                pyautogui.alert(message, title="Battery Alert", button="OK")
+        time.sleep(3600) # 1 hour
 
-            # Lê o valor do nível de bateria de cada dispositivo
-            fone_bateria = int(fone.char_read("2a19"), 16)
-            teclado_bateria = int(teclado.char_read("2a19"), 16)
-            mouse_bateria = int(mouse.char_read("2a19"), 16)
-
-            # Exibe a notificação com as informações de bateria
-            mensagem = f"AirPods: {fone_bateria}%\nMxKeys Mini: {teclado_bateria}%\nMX Master 3: {mouse_bateria}%"
-            notification.notify(
-                title="Bateria dos dispositivos Bluetooth",
-                message=mensagem,
-                timeout=10
-            )
-
-        # Aguarda 30 minutos antes de enviar a próxima notificação
-        time.sleep(30*60)
+if __name__ == "__main__":
+    main()
