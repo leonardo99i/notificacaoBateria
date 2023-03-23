@@ -1,58 +1,34 @@
-import bluetooth
-import time
-from win10toast import ToastNotifier
+import asyncio
+from bleak import BleakClient
+from plyer import notification
 
-# Endereços MAC dos dispositivos Bluetooth a serem conectados
-addrs = ['11:22:33:44:55:66', '77:88:99:AA:BB:CC', 'DD:EE:FF:00:11:22']
+# Endereços MAC dos dispositivos
+DEVICE_MACS = {
+    "MX Master 3": "00:12:4B:00:22:CA",
+    "MX Keys Mini": "00:12:4B:00:1E:0C",
+    "AirPods de Leonardo": "11:22:33:44:55:66"
+}
 
-# UUID do perfil de bateria (Battery Service) Bluetooth
-uuid = '0000180f-0000-1000-8000-00805f9b34fb'
+async def get_battery_level(device_name: str) -> int:
+    async with BleakClient(DEVICE_MACS[device_name]) as client:
+        battery_service = await client.get_service_by_uuid("0000180f-0000-1000-8000-00805f9b34fb")
+        battery_level_char = await battery_service.get_characteristic("00002a19-0000-1000-8000-00805f9b34fb")
+        battery_level = await battery_level_char.read_value()
+        return battery_level[0]
 
-# Intervalo de tempo para verificar a porcentagem de bateria (em segundos)
-interval = 600 # 10 minutos
+async def send_notification(device_name: str, battery_level: int):
+    notification_title = f"{device_name}: bateria"
+    notification_text = f"{battery_level}% de bateria restante"
+    notification.notify(title=notification_title, message=notification_text)
 
-# Loop infinito para verificar a porcentagem de bateria e enviar a notificação
-while True:
-    for addr in addrs:
-        # Conectando ao dispositivo Bluetooth
-        sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        sock.connect((addr, 1))
+async def get_and_send_battery_levels():
+    while True:
+        for device_name in DEVICE_MACS:
+            try:
+                battery_level = await get_battery_level(device_name)
+                await send_notification(device_name, battery_level)
+            except:
+                print(f"Erro ao obter a bateria de {device_name}")
+        await asyncio.sleep(3600) # Espera uma hora (3600 segundos) antes de repetir
 
-        # Obtendo o nível de bateria do perfil de bateria Bluetooth
-        level = None
-        for svc in bluetooth.find_service(uuid=uuid, address=addr):
-            for chn in svc['channels']:
-                try:
-                    # Lendo o valor da porcentagem de bateria
-                    sock.send(chr(0x16))
-                    sock.send(chr(chn))
-                    data = sock.recv(1024)
-                    level = ord(data[-1])
-                except:
-                    pass
-
-        # Fechando a conexão Bluetooth
-        sock.close()
-
-        # Enviando a notificação de desktop com o nível de bateria ou com a mensagem de erro, conforme o caso
-        toaster = ToastNotifier()
-        device_name = ''
-        if addr == '11:22:33:44:55:66':
-            device_name = 'MX Keys Mini'
-        elif addr == '77:88:99:AA:BB:CC':
-            device_name = 'MX Master 3'
-        elif addr == 'DD:EE:FF:00:11:22':
-            device_name = 'Fone de ouvido'
-        if level is not None:
-            toaster.show_toast(
-                'Nível de Bateria Bluetooth - ' + device_name,
-                'O dispositivo Bluetooth ' + device_name + ' está com %d%% de carga na bateria.' % level,
-                duration=10)
-        else:
-            toaster.show_toast(
-                'Erro de Leitura Bluetooth - ' + device_name,
-                'Não foi possível obter a porcentagem de bateria do dispositivo Bluetooth ' + device_name + '.',
-                duration=10)
-
-    # Aguardando o intervalo de tempo definido
-    time.sleep(interval)
+asyncio.run(get_and_send_battery_levels())
