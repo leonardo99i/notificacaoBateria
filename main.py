@@ -5,7 +5,7 @@ from plyer import notification
 devices = {
     "MX Master 3": "38:68:A4:07:AC:F1",
     "MX Keys Mini": "52:D0:92:2B:00:85",
-    "AirPods de Leonardo": "CB:0D:C8:6C:BF:21"
+    "1MORE ComfoBuds Mini": "A4:05:6E:5B:D5:C2"
 }
 
 async def get_battery_level(address):
